@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC & subnet create
+
+Parameters:
+  EnvType: 
+    Description: Environment type.
+    Default: dev
+    Type: String
+    AllowedValues: 
+      - dev
+      - mnt
+      - prd
+    ConstraintDescription: must specify dev or mnt or prd.
+
+  ProjectId:
+    Description: Project name id.
+    Type: String
+    MinLength: "3"
+    MaxLength: "3"
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: must specify Project id.
+  KeyPair:
+    Description: key-test
+    Type: AWS::EC2::KeyPair::KeyName
+  DBPassword:
+    Default: root1234
+    NoEcho: true
+    Description: The database admin account password
+    Type: String
+    MinLength: 8
+
+Mappings:
+  StackConfig:
+    EC2:
+      ImageId: 'ami-923d12f5'
+
+Resources:
+# Create VPC
+  MyVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: default
+      Tags:
+        Key: Name
+        Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"vpc" ] ]
+
+# Create Public RouteTable
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        Key: Name
+        Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"pub-route" ] ]
+
+# Create Private RouteTable
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        Key: Name
+        Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"pri-route" ] ]
+
+# Create Public Subnet A
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.0.0/27
+      AvailabilityZone: "ap-northeast-1a"
+      Tags:
+        Key: Name
+        Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"PublicSunetA" ] ]
+
+  PubSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+# Create Private Subnet A
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.0.64/27
+      AvailabilityZone: "ap-northeast-1a"
+      Tags:
+        Key: Name
+        Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"PrivateSubnetA" ] ]
+  
+  DbSubnet:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DB Private Subnet
+      SubnetIds: [ !Ref PrivateSubnetA ]
+  
+  PriSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+# Create InternetGateway
+  myInternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+        Key: Name
+        Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"igw" ] ]
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref myInternetGateway
+
+  myRoute:
+    Type: AWS::EC2::Route
+    DependsOn: myInternetGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref myInternetGateway
+
+  SecurityGroupA:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: TESTSG
+      VpcId: !Ref MyVPC
+      Tags:
+          Key: 'Name'
+          Value: 'TESTSG'
+      SecurityGroupIngress:
+        IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 58.12.62.59/32
+
+  SecurityGroupRDS:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: 'RDS SG'
+      VpcId: !Ref MyVPC
+      Tags:
+          Key: 'Name'
+          Value: 'RDS SG'
+      SecurityGroupIngress:
+        IpProtocol: tcp
+        FromPort: '3306'
+        ToPort: '3306'
+        CidrIp: 58.12.62.59/32
+
+  EC2Instance01:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      # EBS設定
+      BlockDeviceMappings:
+          DeviceName: '/dev/xvda'
+          Ebs:
+            VolumeType: 'gp2'
+            VolumeSize: 8 
+      ImageId: !FindInMap [ StackConfig, EC2, ImageId ]
+      # シャットダウン時の動作
+      InstanceInitiatedShutdownBehavior: 'stop'
+      # インスタンスタイプ
+      InstanceType: 't2.micro'
+      # キーペア
+      KeyName: !Ref KeyPair
+      # 詳細モニタリング設定
+      Monitoring: false
+      # セキュリティグループ
+      SecurityGroupIds:
+          !GetAtt SecurityGroupA.GroupId
+      # サブネット
+      SubnetId: !Ref PublicSubnetA
+      # テナンシー
+      Tenancy: 'default'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum -y update
+      # タグ
+      Tags:
+        Key: 'Name'
+        Value: 'Test01'
+
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      AllocatedStorage: 5
+      MasterUsername: root
+      DBInstanceClass: db.t2.micro
+      DBSubnetGroupName: !Ref PrivateSubnetA
+      VPCSecurityGroups: !Ref DbSubnet
+      MasterUserPassword: { "Fn::Join" : [ "", [ { "Ref": "DBPassword" }, "!Z3" ] ] }
+      DeletionPolicy: Snapshot
+
+Outputs:
+  StackVPC:
+    Description: The ID of the VPC
+    Value: !Ref MyVPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCID"
+
+  StackPubSubnetA:
+    Description: The ID of the VPC Subnet
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnetA"
+
+  StackPriSubnetA:
+    Description: The ID of the VPC Subnet
+    Value: !Ref PrivateSubnetA
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnetA"
+
