@@ -44,7 +44,7 @@ Resources:
       EnableDnsHostnames: 'true'
       InstanceTenancy: default
       Tags:
-        Key: Name
+      - Key: Name
         Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"vpc" ] ]
 
 # Create Public RouteTable
@@ -53,7 +53,7 @@ Resources:
     Properties:
       VpcId: !Ref MyVPC
       Tags:
-        Key: Name
+      - Key: Name
         Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"pub-route" ] ]
 
 # Create Private RouteTable
@@ -62,7 +62,7 @@ Resources:
     Properties:
       VpcId: !Ref MyVPC
       Tags:
-        Key: Name
+      - Key: Name
         Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"pri-route" ] ]
 
 # Create Public Subnet A
@@ -73,7 +73,7 @@ Resources:
       CidrBlock: 10.0.0.0/27
       AvailabilityZone: "ap-northeast-1a"
       Tags:
-        Key: Name
+      - Key: Name
         Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"PublicSunetA" ] ]
 
   PubSubnetARouteTableAssociation:
@@ -90,7 +90,7 @@ Resources:
       CidrBlock: 10.0.0.64/27
       AvailabilityZone: "ap-northeast-1a"
       Tags:
-        Key: Name
+      - Key: Name
         Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"PrivateSubnetA" ] ]
   
   DbSubnet:
@@ -110,7 +110,7 @@ Resources:
     Type: "AWS::EC2::InternetGateway"
     Properties:
       Tags:
-        Key: Name
+      - Key: Name
         Value: !Join [ "-", [ "Ref":"EnvType" , "Ref":"ProjectId" ,"igw" ] ]
 
   AttachGateway:
@@ -133,7 +133,7 @@ Resources:
       GroupDescription: TESTSG
       VpcId: !Ref MyVPC
       Tags:
-          Key: 'Name'
+        - Key: 'Name'
           Value: 'TESTSG'
       SecurityGroupIngress:
         IpProtocol: tcp
@@ -147,7 +147,7 @@ Resources:
       GroupDescription: 'RDS SG'
       VpcId: !Ref MyVPC
       Tags:
-          Key: 'Name'
+        - Key: 'Name'
           Value: 'RDS SG'
       SecurityGroupIngress:
         IpProtocol: tcp
@@ -186,7 +186,7 @@ Resources:
           yum -y update
       # タグ
       Tags:
-        Key: 'Name'
+      - Key: 'Name'
         Value: 'Test01'
 
   DbInstance:
