@@ -2,6 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: VPC & subnet create
 
 Parameters:
+# 環境選択
   EnvType: 
     Description: Environment type.
     Default: dev
@@ -11,7 +12,7 @@ Parameters:
       - mnt
       - prd
     ConstraintDescription: must specify dev or mnt or prd.
-
+# プロジェクト名
   ProjectId:
     Description: Project name id.
     Type: String
@@ -19,15 +20,20 @@ Parameters:
     MaxLength: 24
     AllowedPattern: "[a-zA-Z0-9]*"
     ConstraintDescription: must specify Project id.
-
+# SSHキーペア
   KeyPair:
-    Description: key-test
+    Description: test-cfn
     Type: AWS::EC2::KeyPair::KeyName
-
+# DB初期PW
   DBPassword:
     Default: root1234
     NoEcho: true
     Description: The database admin account password
+    Type: String
+    MinLength: 8
+  
+  S3BucketName:
+    Description: S3 Bucket name
     Type: String
     MinLength: 8
 
@@ -154,10 +160,10 @@ Resources:
         - Key: 'Name'
           Value: 'TESTSG'
       SecurityGroupIngress:
-        IpProtocol: tcp
-        FromPort: '30225'
-        ToPort: '30225'
-        CidrIp: 58.12.62.59/32
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: W.X.Y.Z/32
 
   SecurityGroupRDS:
     Type: "AWS::EC2::SecurityGroup"
@@ -169,8 +175,8 @@ Resources:
           Value: 'RDS SG'
       SecurityGroupIngress:
         IpProtocol: tcp
-        FromPort: '3306'
-        ToPort: '3306'
+        FromPort: '5432'
+        ToPort: '5432'
         CidrIp: 10.0.1.0/24
 
   EC2Instance01:
@@ -207,6 +213,12 @@ Resources:
       - Key: 'Name'
         Value: 'Test01'
 
+  IPAddress:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+      InstanceId: !Ref EC2Instance01
+  
   DbInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -219,6 +231,41 @@ Resources:
       - !Ref SecurityGroupRDS
       MasterUserPassword: { "Fn::Join" : [ "", [ { "Ref": "DBPassword" }, "!Z3" ] ] }
       # DeletionPolicy: Snapshot
+  
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+  
+  BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Id: BucketPolicy
+        Statement:
+          - Sid: 1
+            Action: "s3:GetObject"
+            Effect: Allow
+            Resource: 
+            - Fn::Join:
+                - ""
+                -
+                  - "arn:aws:s3:::"
+                  -
+                    Ref: S3Bucket
+                  - "/*"
+            - Fn::Join:
+                - ""
+                -
+                  - "arn:aws:s3:::"
+                  -
+                    Ref: S3Bucket
+                  - "/"
+            # Resource: { "Fn::Sub" : [ "arn:aws:s3:::${sb}/", { sb: { "Ref": "S3Bucket" } } ] }
+            Principal:
+              AWS: "*"
 
 Outputs:
   StackVPC:
