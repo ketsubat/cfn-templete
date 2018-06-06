@@ -22,7 +22,7 @@ Parameters:
     ConstraintDescription: must specify Project id.
 # SSHキーペア
   KeyPair:
-    Description: test-cfn
+    Description: Key pair for EC2.
     Type: AWS::EC2::KeyPair::KeyName
 # DB初期PW
   DBPassword:
@@ -163,7 +163,7 @@ Resources:
       - IpProtocol: tcp
         FromPort: '22'
         ToPort: '22'
-        CidrIp: W.X.Y.Z/32
+        CidrIp: A.B.C.D/32
 
   SecurityGroupRDS:
     Type: "AWS::EC2::SecurityGroup"
@@ -236,7 +236,8 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref S3BucketName
-  
+      VersioningConfiguration: Enabled
+
   BucketPolicy:
     Type: "AWS::S3::BucketPolicy"
     Properties:
@@ -246,26 +247,26 @@ Resources:
         Id: BucketPolicy
         Statement:
           - Sid: 1
-            Action: "s3:GetObject"
             Effect: Allow
-            Resource: 
-            - Fn::Join:
-                - ""
-                -
-                  - "arn:aws:s3:::"
-                  -
-                    Ref: S3Bucket
-                  - "/*"
-            - Fn::Join:
-                - ""
-                -
-                  - "arn:aws:s3:::"
-                  -
-                    Ref: S3Bucket
-                  - "/"
-            # Resource: { "Fn::Sub" : [ "arn:aws:s3:::${sb}/", { sb: { "Ref": "S3Bucket" } } ] }
+            Action: 
+            - "s3:Get*"
+            - "s3:List*"
+            - "s3:DeleteObject"
+            - "s3:PutObject"
+            Resource: { "Fn::Join" : [ "", [ "arn:aws:s3:::", { "Ref": "S3Bucket" }, "/*" ] ] }
             Principal:
               AWS: "*"
+            Condition:
+              IpAddress:
+                aws:SourceIp: A.B.C.D/32
+          - Sid: 2
+            Effect: Deny
+            Action: "s3:*"
+            Resource: { "Fn::Join" : [ "", [ "arn:aws:s3:::", { "Ref": "S3Bucket" }, "/*" ] ] }
+            Principal: "*"
+            Condition:
+              NotIpAddress:
+                aws:SourceIp: A.B.C.D/32
 
 Outputs:
   StackVPC:
