@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC & subnet create
+
+Parameters:
+# 環境選択
+  EnvType: 
+    Description: Environment type.
+    Default: dev
+    Type: String
+    AllowedValues: 
+      - dev
+      - mnt
+      - prd
+    ConstraintDescription: must specify dev or mnt or prd.
+  # プロジェクト名
+  ProjectId:
+    Description: Project name id.
+    Type: String
+    MinLength: 8
+    MaxLength: 24
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: must specify Project id.
+  # SSHキーペア
+  KeyPair:
+    Description: Key pair for EC2.
+    Type: AWS::EC2::KeyPair::KeyName
+
+Mappings:
+  StackConfig:
+    EC2:
+      ImageId: 'ami-5587c633'
+
+Resources:
+  SecurityGroupPublic:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: Security group for XXXXX
+      VpcId: { "Fn::ImportValue" : "StackVPC" }
+      Tags:
+        - Key: 'Name'
+          Value: 'PublicSubnetGroup'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 58.12.62.59/32
+
+  EC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      # EBS設定
+      BlockDeviceMappings:
+        - DeviceName: '/dev/xvdf'
+          Ebs:
+            VolumeType: 'gp2'
+            VolumeSize: 8
+      ImageId: !FindInMap [ StackConfig, EC2, ImageId ]
+      # シャットダウン時の動作
+      InstanceInitiatedShutdownBehavior: 'stop'
+      # インスタンスタイプ
+      InstanceType: 't2.micro'
+      # キーペア
+      KeyName: !Ref KeyPair
+      # 詳細モニタリング設定
+      Monitoring: false
+      # セキュリティグループ
+      SecurityGroupIds:
+        - !GetAtt SecurityGroupA.GroupId
+      # サブネット
+      SubnetId: { "Fn::ImportValue" : "PublicSubnetA" }
+      # テナンシー
+      Tenancy: 'default'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum -y update
+      # タグ
+      Tags:
+      - Key: 'Name'
+        Value: 'WebServerInstance'
